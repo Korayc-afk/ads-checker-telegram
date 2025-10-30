@@ -2,7 +2,7 @@ fastapi
 uvicorn
 sqlmodel
 httpx
-aiogram
+aiogram==2.25.1
 python-dotenv
 serpapi
 psycopg2-binary  # PostgreSQL için bu şart!

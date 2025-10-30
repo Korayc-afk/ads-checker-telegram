@@ -27,7 +27,7 @@ DEFAULT_GL = os.getenv("DEFAULT_GL", "tr")
 DEFAULT_HL = os.getenv("DEFAULT_HL", "tr")
 
 bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher() # v3'te dispatcher böyle başlatılır
+dp = Dispatcher(bot)  # v2'de bot burada verilir
 
 USER_DEVICE = {}
 USER_LOCATION = {}
