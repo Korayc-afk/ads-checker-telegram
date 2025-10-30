@@ -5,26 +5,29 @@ import datetime as dt
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Proje yolunu ekle
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# --- YENİ v3 IMPORTLARI ---
-from aiogram import Bot, Dispatcher, types, F
+# --- GÜNCELLENDİ: v3 için doğru importlar ---
+from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 # --- BİTTİ ---
 
+# --- Ortam Değişkenleri ve Sabitler ---
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 if not BOT_TOKEN:
     raise RuntimeError("TELEGRAM_BOT_TOKEN .env dosyasında eksik!")
 
-API_BASE = os.getenv("API_BASE") 
-if not API_BASE:
-    raise RuntimeError("API_BASE .env dosyasında eksik!")
+# Render'da, bot ve API aynı yerde çalışacak.
+# API_BASE'i .env'den al, yoksa Render'ın varsayılanını kullan
+API_BASE = os.getenv("API_BASE", "http://127.0.0.1:10000") 
 
 DEFAULT_GL = os.getenv("DEFAULT_GL", "tr")
 DEFAULT_HL = os.getenv("DEFAULT_HL", "tr")
 
 bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher() # v3'te dispatcher boş başlatılır
+dp = Dispatcher() # v3'te dispatcher böyle başlatılır
 
 USER_DEVICE = {}
 USER_LOCATION = {}
@@ -35,8 +38,8 @@ def get_device(uid: int) -> str:
 def get_location(uid: int) -> str:
     return USER_LOCATION.get(uid)
 
-# --- YENİ v3 SÖZDİZİMİ (SYNTAX) ---
-@dp.message(Command(commands=["start", "help"]))
+# --- GÜNCELLENDİ: v3 Komut formatı ---
+@dp.message(Command("start", "help"))
 async def help_command(m: types.Message):
     await m.reply(
         "Merhaba! Google'da reklam kontrolü yaparım.\n\n"
@@ -50,25 +53,28 @@ async def help_command(m: types.Message):
         "`kredi kartı`"
     )
 
-@dp.message(Command(commands=["mobile"]))
+# --- GÜNCELLENDİ: v3 Komut formatı ---
+@dp.message(Command("mobile"))
 async def set_mobile_mode(m: types.Message):
-    # m.text yerine m.text.split() yerine m.get_args() kullanmak daha temiz
-    args = m.get_args()
-    if args and args.lower() in ("on", "off"):
-        mode = "mobile" if args.lower() == "on" else "desktop"
+    parts = m.text.split()
+    if len(parts) >= 2 and parts[1].lower() in ("on", "off"):
+        mode = "mobile" if parts[1].lower() == "on" else "desktop"
         USER_DEVICE[m.from_user.id] = mode
         await m.reply(f"✅ Arama modu `{mode}` olarak ayarlandı.")
     else:
         await m.reply("Kullanım: `/mobile on` veya `/mobile off`")
 
-@dp.message(Command(commands=["mode"]))
+# --- GÜNCELLENDİ: v3 Komut formatı ---
+@dp.message(Command("mode"))
 async def get_current_mode(m: types.Message):
     current_mode = get_device(m.from_user.id)
     await m.reply(f"ℹ️ Cihaz modu: `{current_mode}`")
 
-@dp.message(Command(commands=["location"]))
+# --- GÜNCELLENDİ: v3 Komut formatı ---
+@dp.message(Command("location"))
 async def set_location(m: types.Message):
-    location_query = m.get_args().strip()
+    # .get_args() v2'de kaldı, v3'te manuel ayıklama daha garanti
+    location_query = m.text.replace("/location", "").strip()
     if location_query:
         USER_LOCATION[m.from_user.id] = location_query
         await m.reply(f"✅ Konum başarıyla `{location_query}` olarak ayarlandı.")
@@ -77,9 +83,13 @@ async def set_location(m: types.Message):
             del USER_LOCATION[m.from_user.id]
         await m.reply("ℹ️ Konum sıfırlandı. Artık genel arama yapılacak.")
 
-# Komut olmayan tüm metin mesajlarını yakalar
-@dp.message(F.text)
+# --- GÜNCELLENDİ: v3 "diğer tüm mesajlar" formatı ---
+@dp.message()
 async def run_query(m: types.Message):
+    # Komutları ayıkla, eğer mesaj bir komutla başlıyorsa işlem yapma
+    if m.text and m.text.startswith("/"):
+        return
+
     query = m.text.strip()
     if not query:
         return await m.reply("Lütfen boş mesaj göndermeyin.")
