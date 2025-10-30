@@ -1,16 +1,15 @@
 import os
 import sys
-import time
 import httpx
 from dotenv import load_dotenv
 from datetime import datetime
 import asyncio
 
 load_dotenv()
-
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.models import get_due_jobs, update_job_next_run, init_db, engine, Session, select, ScheduledJob, datetime, timedelta # Modelleri doğru import et
+# Modelleri ve SerpAPI'yi import et
+from app.models import get_due_jobs, update_job_next_run, init_db
 from app.serp import check_ads
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -18,6 +17,7 @@ NOTIFICATION_GROUP_ID = os.getenv("TELEGRAM_NOTIFICATION_GROUP_ID")
 API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
 
 def send_telegram_notification(chat_id: str, message: str):
+    # (Bu fonksiyon bir önceki cevaptakiyle aynı)
     payload = {'chat_id': chat_id, 'text': message}
     try:
         with httpx.Client() as client:
@@ -27,19 +27,23 @@ def send_telegram_notification(chat_id: str, message: str):
     except Exception as e:
         print(f"-> HATA: Bildirim gönderilemedi: {chat_id}, Hata: {e}")
 
-async def run_scheduler():
-    print("Zamanlayıcı v2.0 (Sessiz Mod) başlatıldı... Her 60 saniyede bir görevler kontrol edilecek.")
-    if not NOTIFICATION_GROUP_ID:
-        print("UYARI: .env dosyasında TELEGRAM_NOTIFICATION_GROUP_ID bulunamadı.")
+async def run_job_once():
+    """
+    Bu fonksiyon SADECE BİR KEZ çalışır ve kapanır.
+    Cron Job tarafından tetiklenmek için tasarlanmıştır.
+    """
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Cron Job tetiklendi. Zamanı gelmiş görevler aranıyor...")
     
     # Veritabanını başlat
     init_db()
+    
+    if not NOTIFICATION_GROUP_ID:
+        print("UYARI: .env dosyasında TELEGRAM_NOTIFICATION_GROUP_ID bulunamadı.")
 
-    while True:
-        try:
-            due_jobs = get_due_jobs()
-            if due_jobs:
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] {len(due_jobs)} adet çalışacak görev bulundu.")
+    try:
+        due_jobs = get_due_jobs()
+        if due_jobs:
+            print(f"-> {len(due_jobs)} adet çalışacak görev bulundu.")
 
             for job in due_jobs:
                 print(f"--> Görev çalıştırılıyor: '{job.query}'")
@@ -47,12 +51,11 @@ async def run_scheduler():
                 
                 if result.get("has_ads"):
                     print(f"--> REKLAM BULUNDU! Bildirim hazırlanıyor...")
+                    # ... (Bildirim mesajı oluşturma kodu aynı) ...
                     location_info = f" ({result.get('location_used', job.location)})" if result.get('location_used', job.location) else ""
-                    
                     message_header = (f"🔔 Zamanlanmış Uyarı: Reklam Bulundu!\n\n"
                                       f"Sorgu: {job.query}{location_info}\n"
                                       f"Reklam Sayısı: {result.get('ads_count', 0)} adet")
-                    
                     ad_lines = []
                     ad_details = result.get("ads", [])
                     if ad_details:
@@ -61,7 +64,6 @@ async def run_scheduler():
                             title = ad.get("title", "Başlık Yok")
                             url = ad.get("url", "URL Yok")
                             ad_lines.append(f"{i}) {title}\n   └ {url}")
-                    
                     message = message_header + "\n" + "\n\n".join(ad_lines)
 
                     target_chat_id = job.telegram_user_id or NOTIFICATION_GROUP_ID
@@ -72,11 +74,14 @@ async def run_scheduler():
                 
                 update_job_next_run(job.id, job.interval_minutes)
                 print(f"--> Görev tamamlandı ve güncellendi: '{job.query}'")
+        else:
+            print("-> Çalıştırılacak zamanı gelmiş görev bulunamadı.")
 
-        except Exception as e:
-            print(f"Zamanlayıcı döngüsünde bir hata oluştu: {e}")
-        
-        time.sleep(60)
+    except Exception as e:
+        print(f"Cron Job çalışırken bir hata oluştu: {e}")
+    
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Cron Job tamamlandı.")
 
 if __name__ == "__main__":
-    asyncio.run(run_scheduler())
+    # Script'i bir kez çalıştırıp bitir
+    asyncio.run(run_job_once())
