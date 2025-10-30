@@ -10,19 +10,23 @@ load_dotenv()
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from aiogram import Bot, Dispatcher, types
-from aiogram.utils import executor
+# from aiogram.utils import executor # <-- BU SATIR SİLİNDİ (Hatanın kaynağı buydu)
 
 # --- Ortam Değişkenleri ve Sabitler ---
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 if not BOT_TOKEN:
     raise RuntimeError("TELEGRAM_BOT_TOKEN .env dosyasında eksik!")
 
-API_BASE = os.getenv("API_BASE", "http://127.0.0.1:8000") # Render'da bunu değiştireceğiz
+# Render'da, bot ve API aynı yerde olduğu için localhost kullanabiliriz
+API_BASE = "http://127.0.0.1:10000" # Render varsayılan olarak 10000 portunu kullanır
+# Eğer API'yi farklı bir adreste yayınlıyorsak, onu .env'den al:
+API_BASE = os.getenv("API_BASE", "http://127.0.0.1:10000") 
+
 DEFAULT_GL = os.getenv("DEFAULT_GL", "tr")
 DEFAULT_HL = os.getenv("DEFAULT_HL", "tr")
 
 bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher(bot)
+dp = Dispatcher() # v3'te dispatcher'a botu vermeye gerek yok
 
 USER_DEVICE = {}
 USER_LOCATION = {}
@@ -91,6 +95,14 @@ async def run_query(m: types.Message):
 
     try:
         async with httpx.AsyncClient(timeout=30) as client:
+            # API_BASE'i Render'ın iç adresine göre ayarla
+            # Render'da web servisleri birbirleriyle "http://servis-adı:port" üzerinden konuşur
+            # API servisinin adı "ads-api" ve portu 10000 ise:
+            # API_BASE = "http://ads-api:10000"
+            # Ancak en temizi, localhost kullanmaktır, çünkü Render bunu çözer.
+            
+            # API_BASE'i .env'den alacak şekilde ayarlamıştık. 
+            # Render'da ads-api servisinin adresini (https://...) API_BASE olarak ayarlamalıyız.
             r = await client.post(f"{API_BASE}/v1/check", json=payload)
             r.raise_for_status()
             data = r.json()
@@ -113,8 +125,9 @@ async def run_query(m: types.Message):
         body = "\n\n".join(lines) if lines else ""
         await wait_message.edit_text(head + ("\n\n" + body if body else ""), disable_web_page_preview=True)
     else:
-        await wait_message.edit_text(f"✅ Reklam Yok\nSorgu: `{query}` ({dev}){location_info}")
+        await wait_message.edit_text(f"✅ Reklam Yok\nSorgu: `{query}` ({dev})")
 
-if __name__ == "__main__":
-    print("Bot başlatılıyor (Render Worker)...")
-    executor.start_polling(dp, skip_updates=True)
+# --- BU BLOK SİLİNDİ ---
+# if __name__ == "__main__":
+#     print("Bot başlatılıyor (Render Worker)...")
+#     executor.start_polling(dp, skip_updates=True)
