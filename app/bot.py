@@ -5,28 +5,26 @@ import datetime as dt
 from dotenv import load_dotenv
 
 load_dotenv()
-
-# Proje yolunu ekle
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from aiogram import Bot, Dispatcher, types
-# from aiogram.utils import executor # <-- BU SATIR SİLİNDİ (Hatanın kaynağı buydu)
+# --- YENİ v3 IMPORTLARI ---
+from aiogram import Bot, Dispatcher, types, F
+from aiogram.filters import Command
+# --- BİTTİ ---
 
-# --- Ortam Değişkenleri ve Sabitler ---
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 if not BOT_TOKEN:
     raise RuntimeError("TELEGRAM_BOT_TOKEN .env dosyasında eksik!")
 
-# Render'da, bot ve API aynı yerde olduğu için localhost kullanabiliriz
-API_BASE = "http://127.0.0.1:10000" # Render varsayılan olarak 10000 portunu kullanır
-# Eğer API'yi farklı bir adreste yayınlıyorsak, onu .env'den al:
-API_BASE = os.getenv("API_BASE", "http://127.0.0.1:10000") 
+API_BASE = os.getenv("API_BASE") 
+if not API_BASE:
+    raise RuntimeError("API_BASE .env dosyasında eksik!")
 
 DEFAULT_GL = os.getenv("DEFAULT_GL", "tr")
 DEFAULT_HL = os.getenv("DEFAULT_HL", "tr")
 
 bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher() # v3'te dispatcher'a botu vermeye gerek yok
+dp = Dispatcher() # v3'te dispatcher boş başlatılır
 
 USER_DEVICE = {}
 USER_LOCATION = {}
@@ -37,7 +35,8 @@ def get_device(uid: int) -> str:
 def get_location(uid: int) -> str:
     return USER_LOCATION.get(uid)
 
-@dp.message_handler(commands=["start", "help"])
+# --- YENİ v3 SÖZDİZİMİ (SYNTAX) ---
+@dp.message(Command(commands=["start", "help"]))
 async def help_command(m: types.Message):
     await m.reply(
         "Merhaba! Google'da reklam kontrolü yaparım.\n\n"
@@ -51,22 +50,23 @@ async def help_command(m: types.Message):
         "`kredi kartı`"
     )
 
-@dp.message_handler(commands=["mobile"])
+@dp.message(Command(commands=["mobile"]))
 async def set_mobile_mode(m: types.Message):
-    parts = m.text.split()
-    if len(parts) >= 2 and parts[1].lower() in ("on", "off"):
-        mode = "mobile" if parts[1].lower() == "on" else "desktop"
+    # m.text yerine m.text.split() yerine m.get_args() kullanmak daha temiz
+    args = m.get_args()
+    if args and args.lower() in ("on", "off"):
+        mode = "mobile" if args.lower() == "on" else "desktop"
         USER_DEVICE[m.from_user.id] = mode
         await m.reply(f"✅ Arama modu `{mode}` olarak ayarlandı.")
     else:
         await m.reply("Kullanım: `/mobile on` veya `/mobile off`")
 
-@dp.message_handler(commands=["mode"])
+@dp.message(Command(commands=["mode"]))
 async def get_current_mode(m: types.Message):
     current_mode = get_device(m.from_user.id)
     await m.reply(f"ℹ️ Cihaz modu: `{current_mode}`")
 
-@dp.message_handler(commands=["location"])
+@dp.message(Command(commands=["location"]))
 async def set_location(m: types.Message):
     location_query = m.get_args().strip()
     if location_query:
@@ -77,7 +77,8 @@ async def set_location(m: types.Message):
             del USER_LOCATION[m.from_user.id]
         await m.reply("ℹ️ Konum sıfırlandı. Artık genel arama yapılacak.")
 
-@dp.message_handler()
+# Komut olmayan tüm metin mesajlarını yakalar
+@dp.message(F.text)
 async def run_query(m: types.Message):
     query = m.text.strip()
     if not query:
@@ -95,14 +96,6 @@ async def run_query(m: types.Message):
 
     try:
         async with httpx.AsyncClient(timeout=30) as client:
-            # API_BASE'i Render'ın iç adresine göre ayarla
-            # Render'da web servisleri birbirleriyle "http://servis-adı:port" üzerinden konuşur
-            # API servisinin adı "ads-api" ve portu 10000 ise:
-            # API_BASE = "http://ads-api:10000"
-            # Ancak en temizi, localhost kullanmaktır, çünkü Render bunu çözer.
-            
-            # API_BASE'i .env'den alacak şekilde ayarlamıştık. 
-            # Render'da ads-api servisinin adresini (https://...) API_BASE olarak ayarlamalıyız.
             r = await client.post(f"{API_BASE}/v1/check", json=payload)
             r.raise_for_status()
             data = r.json()
@@ -126,8 +119,3 @@ async def run_query(m: types.Message):
         await wait_message.edit_text(head + ("\n\n" + body if body else ""), disable_web_page_preview=True)
     else:
         await wait_message.edit_text(f"✅ Reklam Yok\nSorgu: `{query}` ({dev})")
-
-# --- BU BLOK SİLİNDİ ---
-# if __name__ == "__main__":
-#     print("Bot başlatılıyor (Render Worker)...")
-#     executor.start_polling(dp, skip_updates=True)
