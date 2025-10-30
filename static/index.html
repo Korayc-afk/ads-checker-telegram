@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Reklam Denetleyicisi</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Google Reklam Denetleyicisi</h1>
+        <p>Bir anahtar kelime için Google'da anlık olarak reklam olup olmadığını kontrol edin.</p>
+        
+        <form id="check-form">
+            <input type="text" id="query" placeholder="Anahtar kelime girin (örn: otel)" required>
+            <input type="text" id="location" placeholder="Konum (opsiyonel, örn: Istanbul, Turkey)">
+            <div class="radio-group">
+                <label><input type="radio" name="device" value="desktop" checked> Masaüstü</label>
+                <label><input type="radio" name="device" value="mobile"> Mobil</label>
+            </div>
+            <button type="submit">Reklam Ara</button>
+        </form>
+        
+        <div id="loader" class="hidden"></div>
+        <div id="results"></div>
+
+        <hr style="margin: 40px 0; border-color: var(--card-border);">
+        <div class="scheduled-jobs">
+            <h2>Zamanlanmış Görevler</h2>
+            <form id="job-form">
+                <input type="text" id="job-query" placeholder="Anahtar kelime" required>
+                <input type="text" id="job-location" placeholder="Konum (opsiyonel)">
+                <select id="job-interval">
+                    <option value="2">Her 2 Dakikada Bir</option>
+                    <option value="5">Her 5 Dakikada Bir</option>
+                    <option value="30">Her 30 Dakikada Bir</option>
+                    <option value="60">Her 1 Saatte Bir</option>
+                    <option value="360">Her 6 Saatte Bir</option>
+                    <option value="720">Her 12 Saatte Bir</option>
+                    <option value="1440">Her 24 Saatte Bir</option>
+                </select>
+                <button type="submit">Görevi Zamanla</button>
+            </form>
+            <div id="job-list-container">
+                <h3>Aktif Görevler</h3>
+                <ul id="job-list"></ul>
+            </div>
+        </div>
+    </div>
+    
+    <footer>@Teknik ve Geliştirme Padi</footer>
+    <script src="/static/script.js"></script>
+</body>
+</html>

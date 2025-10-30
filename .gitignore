@@ -1,0 +1,13 @@
+# Sanal ortam klasörü
+venv/
+.venv/
+
+# Python cache dosyaları
+__pycache__/
+*.pyc
+
+# Hassas bilgileri içeren ortam değişkenleri dosyası
+.env
+
+# SQLite veritabanı dosyası (Render'da PostgreSQL kullanacağız)
+data.db

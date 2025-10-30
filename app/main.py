@@ -1,0 +1,86 @@
+import os
+import sys
+from typing import Literal, Optional, List
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from datetime import datetime, timedelta
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# Proje yolunu ekle
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from app.serp import check_ads
+from app.models import init_db, add_log, list_logs, SearchLog, ScheduledJob, add_job, list_all_jobs, delete_job_by_id
+
+DEFAULT_GL = os.getenv("DEFAULT_GL", "tr")
+DEFAULT_HL = os.getenv("DEFAULT_HL", "tr")
+
+app = FastAPI(title="Ads Checker API")
+
+# Proje ana dizinindeki 'static' klasörünü bağla
+static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static')
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+@app.on_event("startup")
+def _startup():
+    init_db()
+
+@app.get("/health")
+async def health():
+    return {"ok": True}
+
+class CheckRequest(BaseModel):
+    query: str = Field(..., min_length=1)
+    device: Literal["desktop", "mobile"] = "desktop"
+    gl: str = DEFAULT_GL
+    hl: str = DEFAULT_HL
+    location: Optional[str] = None
+
+@app.post("/v1/check")
+async def check(req: CheckRequest):
+    try:
+        res = await check_ads(req.query, gl=req.gl, hl=req.hl, device=req.device, location=req.location)
+    except Exception as e:
+        raise HTTPException(502, f"Upstream error: {e}")
+    entry = SearchLog(query=res["query"], has_ads=res["has_ads"], ads_count=res["ads_count"], types=",".join(res["types"]), device=res["device"], gl=res["gl"], hl=res["hl"], latency_ms=res["latency_ms"])
+    add_log(entry)
+    return res
+
+class JobCreateRequest(BaseModel):
+    query: str
+    interval_minutes: int
+    location: Optional[str] = None
+    device: Literal["desktop", "mobile"] = "desktop"
+    telegram_user_id: Optional[str] = None
+
+@app.post("/v1/jobs", response_model=ScheduledJob, status_code=201)
+async def create_job(req: JobCreateRequest):
+    job = ScheduledJob(
+        query=req.query,
+        interval_minutes=req.interval_minutes,
+        location=req.location,
+        device=req.device,
+        telegram_user_id=req.telegram_user_id,
+        next_run_at=datetime.utcnow() + timedelta(minutes=req.interval_minutes)
+    )
+    created_job = add_job(job)
+    return created_job
+
+@app.get("/v1/jobs", response_model=List[ScheduledJob])
+async def get_all_jobs():
+    return list_all_jobs()
+
+@app.delete("/v1/jobs/{job_id}", status_code=204)
+async def delete_job(job_id: int):
+    success = delete_job_by_id(job_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return
+
+@app.get("/", include_in_schema=False)
+async def read_index():
+    return FileResponse(os.path.join(static_dir, 'index.html'))

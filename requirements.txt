@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+sqlmodel
+httpx
+aiogram
+python-dotenv
+serpapi
+psycopg2-binary  # PostgreSQL için bu şart!
