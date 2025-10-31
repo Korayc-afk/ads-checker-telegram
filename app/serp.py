@@ -13,21 +13,18 @@ DEFAULT_GL = os.getenv("DEFAULT_GL", "tr")
 DEFAULT_HL = os.getenv("DEFAULT_HL", "tr")
 
 def _host(u: str) -> str:
-    """URL'den domain adını temizler."""
     try:
         return urlparse(u).netloc.replace("www.", "")
     except Exception:
         return u
 
 async def _make_serpapi_request(params: dict) -> dict:
-    """SerpAPI'ye istek atan yardımcı fonksiyon."""
-    async with httpx.Client(timeout=20) as client:
+    async with httpx.AsyncClient(timeout=20) as client:
         r = await client.get("https://serpapi.com/search", params=params)
         r.raise_for_status()
         return r.json()
 
 async def check_ads(q: str, gl: str = DEFAULT_GL, hl: str = DEFAULT_HL, device: str = "desktop", location: Optional[str] = None):
-    """'En İyi Sonucu Getir' stratejisi ile reklamları arar."""
     if not SERPAPI_KEY:
         raise RuntimeError("SERPAPI_KEY .env dosyasında eksik!")
 
@@ -37,7 +34,6 @@ async def check_ads(q: str, gl: str = DEFAULT_GL, hl: str = DEFAULT_HL, device: 
         "device": "mobile" if device == "mobile" else "desktop", "num": 10,
     }
 
-    # --- YENİ "GENİŞTEN DARA" ARAMA STRATEJİSİ ---
     search_attempts: List[Dict] = []
     
     # Adım 1: En geniş arama. Konumsuz, genel Türkiye araması (VPN taklidi).
@@ -45,7 +41,7 @@ async def check_ads(q: str, gl: str = DEFAULT_GL, hl: str = DEFAULT_HL, device: 
 
     # Adım 2: Şehir bazlı arama (eğer kullanıcı bir konum girdiyse).
     if location:
-        clean_location = "Istanbul, Turkey" if "istanbul" in location.lower() else location.split('/')[0].strip() + ", Turkey"
+        clean_location = location.split('/')[0].strip() + ", Turkey"
         search_attempts.append({"params": {"location": clean_location}, "name": f"Şehir Bazlı: {clean_location}"})
 
     # Adım 3 (Nadir durumlar için): Kullanıcının girdiği ham veriyi de deneyelim.
@@ -61,10 +57,8 @@ async def check_ads(q: str, gl: str = DEFAULT_GL, hl: str = DEFAULT_HL, device: 
             seen.add(key)
 
     t0 = time.perf_counter()
-    
-    # --- DEĞİŞEN ANA MANTIK BURADA ---
-    best_data = None
-    max_ads_found = -1 # Henüz hiç reklam bulunmadı
+    final_data = None
+    location_used = location
     
     for attempt in unique_attempts:
         print(f"-> Arama denemesi yapılıyor... Strateji: {attempt['name']}")
@@ -73,20 +67,18 @@ async def check_ads(q: str, gl: str = DEFAULT_GL, hl: str = DEFAULT_HL, device: 
         
         data = await _make_serpapi_request(current_params)
         raw_ads = data.get("ads") or data.get("ad_results") or []
-        ads_count = len(raw_ads)
 
-        if ads_count > max_ads_found:
-            print(f"--> YENİ EN İYİ SONUÇ! {ads_count} reklam bulundu. Strateji: {attempt['name']}")
-            max_ads_found = ads_count
-            best_data = data
-            
+        if raw_ads:
+            print(f"--> REKLAM BULUNDU! Strateji: {attempt['name']}")
+            final_data = data
+            location_used = attempt["params"].get("location")
+            break 
         else:
-            print(f"--> {ads_count} reklam bulundu. Önceki sonuç ({max_ads_found} reklam) daha iyiydi.")
+            print(f"--> Reklam bulunamadı. Sonraki strateji denenecek...")
     
-    # Döngü bittikten sonra, en çok reklamı bulan sonucu (best_data) kullan
-    final_data = best_data
-    # --- STRATEJİ BİTTİ ---
-
+    if not final_data:
+        final_data = data
+    
     latency_ms = int((time.perf_counter() - t0) * 1000)
     final_raw_ads = final_data.get("ads") or final_data.get("ad_results") or []
     has_ads = len(final_raw_ads) > 0
@@ -112,7 +104,6 @@ async def check_ads(q: str, gl: str = DEFAULT_GL, hl: str = DEFAULT_HL, device: 
         "gl": gl,
         "hl": hl,
         "device": device,
-        # Hangi konumun kazandığını loglamak için:
-        "location_used": final_data.get("search_parameters", {}).get("location"),
+        "location_used": location_used,
         "ads": details,
     }
