@@ -4,6 +4,7 @@ load_dotenv()
 import os
 import time
 import httpx
+from httpx import HTTPStatusError
 from urllib.parse import urlparse
 from typing import Optional, List, Dict
 
@@ -20,9 +21,15 @@ def _host(u: str) -> str:
 
 async def _make_serpapi_request(params: dict) -> dict:
     async with httpx.AsyncClient(timeout=20) as client:
-        r = await client.get("https://serpapi.com/search", params=params)
-        r.raise_for_status()
-        return r.json()
+        try:
+            r = await client.get("https://serpapi.com/search", params=params)
+            r.raise_for_status()
+            return r.json()
+        except HTTPStatusError as e:
+            body = e.response.text if e.response is not None else ""
+            status = e.response.status_code if e.response is not None else "NA"
+            print(f"[SERPAPI HTTP {status}] {e.request.url}\nBody: {body}")
+            raise
 
 async def check_ads(q: str, gl: str = DEFAULT_GL, hl: str = DEFAULT_HL, device: str = "desktop", location: Optional[str] = None):
     if not SERPAPI_KEY:
@@ -65,7 +72,11 @@ async def check_ads(q: str, gl: str = DEFAULT_GL, hl: str = DEFAULT_HL, device: 
         current_params = base_params.copy()
         current_params.update(attempt["params"])
         
-        data = await _make_serpapi_request(current_params)
+        try:
+            data = await _make_serpapi_request(current_params)
+        except Exception as e:
+            print(f"--> Strateji hata verdi, siradaki denenecek. Hata: {e}")
+            continue
         raw_ads = data.get("ads") or data.get("ad_results") or []
 
         if raw_ads:

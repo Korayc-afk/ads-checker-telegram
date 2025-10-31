@@ -16,7 +16,6 @@ from app.serp import check_ads
 from app.models import init_db, add_log, list_logs, SearchLog, ScheduledJob, add_job, list_all_jobs, delete_job_by_id
 
 # --- GÜNCELLENDİ: Botu ve DP'yi import et ---
-from app.bot import dp, bot 
 from app.scheduler import run_job_once
 # --- BİTTİ ---
 
@@ -32,10 +31,8 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 # --- GÜNCELLENDİ: Botu v3 stiliyle başlat ---
 @app.on_event("startup")
 async def on_startup():
-    init_db() 
-    print("Web API'si başlatıldı, Telegram Botu arka planda başlatılıyor...")
-    # Aiogram v3'te doğru başlatma şekli:
-    asyncio.create_task(dp.start_polling(bot))
+    init_db()
+    print("Web API hazır (polling bu proseste başlatılmıyor).")
 # --- BİTTİ ---
 
 async def check_cron_secret(secret: Optional[str] = Query(None)):

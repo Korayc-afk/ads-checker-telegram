@@ -14,14 +14,17 @@ from app.serp import check_ads
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 NOTIFICATION_GROUP_ID = os.getenv("TELEGRAM_NOTIFICATION_GROUP_ID")
+DEFAULT_LOCATION = os.getenv("DEFAULT_LOCATION", "Istanbul, Turkey")
 API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
 
 def send_telegram_notification(chat_id: str, message: str):
     # (Bu fonksiyon bir önceki cevaptakiyle aynı)
-    payload = {'chat_id': chat_id, 'text': message}
+    payload = {'chat_id': chat_id, 'text': message, 'disable_web_page_preview': True}
     try:
         with httpx.Client() as client:
             r = client.post(API_URL, json=payload, timeout=10)
+            if r.status_code != 200:
+                print("-> TG API Error:", r.status_code, r.text)
             r.raise_for_status()
         print(f"-> Bildirim başarıyla gönderildi: {chat_id}")
     except Exception as e:
@@ -47,7 +50,9 @@ async def run_job_once():
 
             for job in due_jobs:
                 print(f"--> Görev çalıştırılıyor: '{job.query}'")
-                result = await check_ads(q=job.query, device=job.device, location=job.location)
+                # Lokasyon boşsa default kullan
+                loc = (job.location or "").strip() or DEFAULT_LOCATION
+                result = await check_ads(q=job.query, device=job.device, location=loc)
                 
                 if result.get("has_ads"):
                     print(f"--> REKLAM BULUNDU! Bildirim hazırlanıyor...")
