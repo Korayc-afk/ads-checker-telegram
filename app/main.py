@@ -15,9 +15,9 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.serp import check_ads
 from app.models import init_db, add_log, list_logs, SearchLog, ScheduledJob, add_job, list_all_jobs, delete_job_by_id
 
-# --- GÜNCELLENDİ: Botu ve DP'yi import et ---
+# Botu ve zamanlayıcı fonksiyonunu import et
+from app.bot import dp, bot 
 from app.scheduler import run_job_once
-# --- BİTTİ ---
 
 DEFAULT_GL = os.getenv("DEFAULT_GL", "tr")
 DEFAULT_HL = os.getenv("DEFAULT_HL", "tr")
@@ -28,14 +28,14 @@ app = FastAPI(title="Ads Checker API")
 static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static')
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
-# --- GÜNCELLENDİ: Botu v3 stiliyle başlat ---
 @app.on_event("startup")
 async def on_startup():
-    init_db()
-    print("Web API hazır (polling bu proseste başlatılmıyor).")
-# --- BİTTİ ---
+    init_db() 
+    print("Web API'si başlatıldı, Telegram Botu arka planda başlatılıyor...")
+    asyncio.create_task(dp.start_polling(bot))
 
 async def check_cron_secret(secret: Optional[str] = Query(None)):
+    """Harici cron servisinin gizli şifreyi bilip bilmediğini kontrol eder."""
     if not CRON_SECRET:
         print("UYARI: CRON_SECRET ayarlanmamış. Zamanlayıcı trigger'ı güvensiz.")
         return
@@ -47,8 +47,13 @@ async def check_cron_secret(secret: Optional[str] = Query(None)):
 async def health():
     return {"ok": True}
 
+# --- CRON JOB'UN ÇALACAĞI GİZLİ KAPI BURADA ---
 @app.get("/v1/trigger-scheduler")
 async def trigger_scheduler(secret_check: None = Depends(check_cron_secret)):
+    """
+    Harici bir cron job servisi tarafından (örn: cron-job.org) tetiklenir.
+    Zamanı gelmiş görevleri bir kez çalıştırır.
+    """
     print("Harici cron trigger'ı alındı, zamanlayıcı çalıştırılıyor...")
     try:
         asyncio.create_task(run_job_once())
@@ -56,6 +61,7 @@ async def trigger_scheduler(secret_check: None = Depends(check_cron_secret)):
     except Exception as e:
         print(f"Harici cron trigger hatası: {e}")
         raise HTTPException(status_code=500, detail="Zamanlayıcıyı tetiklerken hata oluştu.")
+# --- BİTTİ ---
 
 class CheckRequest(BaseModel):
     query: str = Field(..., min_length=1)
